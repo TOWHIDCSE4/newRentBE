@@ -18,6 +18,7 @@ use App\Http\Resources\Api\WalletTransaction\WalletTransactionCollection;
 use App\Http\Resources\Api\WalletTransaction\WalletTransactionCollectionDeposit;
 use App\Jobs\NotificationUserJob;
 use App\Models\MsgCode;
+use App\Models\Settings;
 use App\Models\User;
 use App\Models\VirtualAccount;
 use App\Models\WalletTransaction;
@@ -188,7 +189,7 @@ class WalletTransactionController extends Controller
             User::query()
                 ->where('id', $request->user->id)
                 ->update([
-                    'golden_coin'=> $remaining_golden_coin,
+                    'golden_coin' => $remaining_golden_coin,
                 ]);
 
 
@@ -295,21 +296,23 @@ class WalletTransactionController extends Controller
                     $virtual_account = VirtualAccount::query()
                         ->where('user_id', $user_id)
                         ->create(
-                            array_merge(Arr::only($virtual_account_param, [
-                                'request_id',
-                                'bank_code',
-                                'request_amount',
-                            ]),
+                            array_merge(
+                                Arr::only($virtual_account_param, [
+                                    'request_id',
+                                    'bank_code',
+                                    'request_amount',
+                                ]),
                                 [
                                     'user_id' => $user_id,
                                     'bank_account_name' => $response_data->data->bank_account_name,
                                     'bank_account_no' => $response_data->data->bank_account_no,
                                     'qr_code_url' => $response_data->data->qr_code_url,
                                 ]
-                            ));
+                            )
+                        );
                 }
 
-                if(isset($response_data->error_code) && $response_data->error_code == '001'){
+                if (isset($response_data->error_code) && $response_data->error_code == '001') {
                     return ResponseUtils::json([
                         'code' => Response::HTTP_CONFLICT,
                         'success' => false,
@@ -345,7 +348,7 @@ class WalletTransactionController extends Controller
                 $response = $ninePayController->callAPI('POST', NinePayController::END_POINT . '/va/update', $virtual_account_param, $headers);
                 $response_data = json_decode($response);
 
-                if(isset($response_data->status) && $response_data->status == 5){
+                if (isset($response_data->status) && $response_data->status == 5) {
                     $virtual_account->bank_account_no = $response_data->data->bank_account_no;
                     $virtual_account->request_amount = $total_amount;
                     $virtual_account->save();
@@ -353,7 +356,7 @@ class WalletTransactionController extends Controller
             }
 
 
-            if(!$virtual_account){
+            if (!$virtual_account) {
                 return ResponseUtils::json([
                     'code' => Response::HTTP_NOT_FOUND,
                     'success' => false,
@@ -441,7 +444,7 @@ class WalletTransactionController extends Controller
             User::query()
                 ->where('id', $request->user->id)
                 ->update([
-                    'golden_coin'=> $remaining_golden_coin,
+                    'golden_coin' => $remaining_golden_coin,
                 ]);
 
             NotificationUserJob::dispatch(
@@ -493,7 +496,7 @@ class WalletTransactionController extends Controller
             'data' => new WalletTransactionCollectionDeposit($deposits),
         ], 200);
     }
-      // Get All Wallet Withdraw by User id
+    // Get All Wallet Withdraw by User id
     public function getAllWalletWithdrawUserId($userId)
     {
         $withdrows = WalletTransaction::where('user_id', $userId)->select(
@@ -518,4 +521,180 @@ class WalletTransactionController extends Controller
         ], 200);
     }
 
+    public function contactBillByWallet()
+    {
+        $userId = \auth()->user()->id;
+        $isHost = User::where(['is_host' => 1, 'id' => $userId])->first();
+        if ($isHost == null) {
+            return ResponseUtils::json([
+                'success' => false,
+                'msg_code' => "USERNOTFOUND",
+                'msg' => "Renter not found",
+            ]);
+        }
+        $commissionPer =  Settings::where('code_label', 'commission')->first();
+        if ($commissionPer && $commissionPer->code_value) {
+            $renterBill = $isHost->golden_coin - ($isHost->golden_coin * ($commissionPer->code_value / 100));
+            $uCmmission = $isHost->golden_coin * ($commissionPer->code_value / 100);
+            $wUser = WalletTransaction::where(['user_id' => $userId])->first();
+
+            if ($wUser) {
+                DB::beginTransaction();
+                try {
+                    $user_id = $userId;
+                    $virtual_account = VirtualAccount::query()
+                        ->where('user_id', $user_id)
+                        ->first();
+                    $ninePayController = new NinePayController();
+
+                    if (!$virtual_account) {
+                        $ninePayController = new NinePayController();
+
+                        $time = time();
+                        $virtual_account_param = [
+                            "request_id" => uniqid(),
+                            "uid" => $user_id,
+                            "uname" => $ninePayController::UNAME,
+                            "bank_code" => request('bank_code'),
+                            "request_amount" => request('bill_amount'),
+                        ];
+
+                        $message = MessageBuilder::instance()
+                            ->with($time, $ninePayController::END_POINT . '/va/create', 'POST')
+                            ->withParams($virtual_account_param)
+                            ->build();
+
+                        $hmacs = new HMACSignature();
+                        $signature = $hmacs->sign($message, $ninePayController::MERCHANT_SECRET_KEY);
+
+                        $headers = array(
+                            'Date: ' . $time,
+                            'Authorization: Signature Algorithm=HS256,Credential=' . $ninePayController::MERCHANT_KEY . ',SignedHeaders=,Signature=' . $signature
+                        );
+
+                        $response = $ninePayController->callAPI('POST', $ninePayController::END_POINT . '/va/create', $virtual_account_param, $headers);
+
+                        $response_data = json_decode($response);
+
+                        if (isset($response_data->status) && ($response_data->status == 5)) {
+                            $virtual_account = VirtualAccount::query()
+                                ->where('user_id', $user_id)
+                                ->create(
+                                    array_merge(
+                                        Arr::only($virtual_account_param, [
+                                            'request_id',
+                                            'bank_code',
+                                            'request_amount',
+                                        ]),
+                                        [
+                                            'user_id' => $user_id,
+                                            'bank_account_name' => $response_data->data->bank_account_name,
+                                            'bank_account_no' => $response_data->data->bank_account_no,
+                                            'qr_code_url' => $response_data->data->qr_code_url,
+                                        ]
+                                    )
+                                );
+                        }
+
+                        if (isset($response_data->error_code) && $response_data->error_code == '001') {
+                            return ResponseUtils::json([
+                                'code' => Response::HTTP_CONFLICT,
+                                'success' => false,
+                                'msg_code' => MsgCode::ALREADY_VIRTUAL_ACCOUNT_EXISTS[0],
+                                'msg' => MsgCode::ALREADY_VIRTUAL_ACCOUNT_EXISTS[1]
+                            ]);
+                        }
+                    } else {
+
+                        $time = time();
+                        $total_amount =  \request('bill_amount') + $virtual_account->request_amount;
+                        $virtual_account_param = [
+                            "request_id" => $virtual_account->request_id,
+                            "uid" => $user_id,
+                            "uname" => $ninePayController::UNAME,
+                            "bank_code" => request()->bank_code,
+                            "request_amount" => $total_amount,
+                        ];
+
+                        $message = MessageBuilder::instance()
+                            ->with($time, $ninePayController::END_POINT . '/va/update', 'POST')
+                            ->withParams($virtual_account_param)
+                            ->build();
+
+                        $hmacs = new HMACSignature();
+                        $signature = $hmacs->sign($message, NinePayController::MERCHANT_SECRET_KEY);
+
+                        $headers = array(
+                            'Date: ' . $time,
+                            'Authorization: Signature Algorithm=HS256,Credential=' . NinePayController::MERCHANT_KEY . ',SignedHeaders=,Signature=' . $signature
+                        );
+
+                        $response = $ninePayController->callAPI('POST', NinePayController::END_POINT . '/va/update', $virtual_account_param, $headers);
+                        $response_data = json_decode($response);
+
+                        if (isset($response_data->status) && $response_data->status == 5) {
+                            $virtual_account->bank_account_no = $response_data->data->bank_account_no;
+                            $virtual_account->request_amount = $total_amount;
+                            $virtual_account->save();
+                        }
+                    }
+
+
+                    if (!$virtual_account) {
+                        return ResponseUtils::json([
+                            'code' => Response::HTTP_NOT_FOUND,
+                            'success' => false,
+                            'msg_code' => MsgCode::NO_VIRTUAL_ACCOUNT_EXISTS[0],
+                            'msg' => MsgCode::NO_VIRTUAL_ACCOUNT_EXISTS[1]
+                        ]);
+                    }
+
+                    $wallet_transaction_created = WalletTransaction::create([
+                        "user_id" => $user_id,
+                        "account_number" => $virtual_account->bank_account_no,
+                        "bank_account_holder_name" => $virtual_account->bank_account_name,
+                        "bank_name" => $virtual_account->bank_code,
+                        "deposit_money" => request('bill_amount'),
+                        "deposit_trading_code" => Helper::generateTransactionID(),
+                        "deposit_date_time" => Helper::getTimeNowString(),
+                        "deposit_content" => request()->deposit_content ?? null,
+                        "qr_code_url" => $virtual_account->qr_code_url,
+                        "type" => WalletTransaction::DEPOSIT,
+                    ]);
+
+
+                    DB::commit();
+                } catch (Exception $e) {
+                    DB::rollBack();
+                    throw new Exception($e->getMessage());
+                }
+            }
+        }
+        return ResponseUtils::json([
+            'code' => Response::HTTP_OK,
+            'success' => true,
+            'msg_code' => MsgCode::SUCCESS[0],
+            'msg' => MsgCode::SUCCESS[1],
+            'data' => $wallet_transaction_created,
+        ]);
+    }
+
+    public function montlyRoomBillByWallet()
+    {
+        $isHost = User::where(['is_host' => 1, 'id' => request('user_id')])->first();
+        if ($isHost == null) {
+            return ResponseUtils::json([
+                'success' => false,
+                'msg_code' => "USERNOTFOUND",
+                'msg' => "Renter not found",
+            ]);
+        }
+        return response()->json([
+            'code' => 200,
+            'success' => true,
+            'msg_code' => MsgCode::SUCCESS[0],
+            'msg' => MsgCode::SUCCESS[1],
+            // 'data' => $withdrows,
+        ], 200);
+    }
 }

@@ -422,7 +422,7 @@ Route::middleware(["mid_res"])
 
         //admin
         Route::prefix('admin')->group(function () {
-           // total_golden_coin,total_silver_coin,total_deposit,total_withdraw
+            // total_golden_coin,total_silver_coin,total_deposit,total_withdraw
             Route::get('/dashboard', 'App\Http\Controllers\Api\Admin\DashboardController@index')->middleware('admin_auth', 'permission_admin');
 
             //Phòng trọ
@@ -480,9 +480,9 @@ Route::middleware(["mid_res"])
             Route::post('/masters', 'App\Http\Controllers\Api\Admin\RenterController@createMaster')->middleware('user_auth', 'permission_admin');
             Route::post('/renters', 'App\Http\Controllers\Api\Admin\RenterController@create')->middleware('user_auth', 'permission_admin');
             Route::get('/renters', 'App\Http\Controllers\Api\Admin\RenterController@getAll')->middleware('admin_auth', 'permission_admin');
-             //GET RENTER BY USER ID
-             Route::get('/renters/getRenterByUserid/{userId}', 'App\Http\Controllers\Api\Admin\RenterController@getRenterByUserid')->middleware('admin_auth', 'permission_admin');
-             // GET MASTER BY USER ID
+            //GET RENTER BY USER ID
+            Route::get('/renters/getRenterByUserid/{userId}', 'App\Http\Controllers\Api\Admin\RenterController@getRenterByUserid')->middleware('admin_auth', 'permission_admin');
+            // GET MASTER BY USER ID
             Route::get('/masters/getMasterByUserid/{userId}', 'App\Http\Controllers\Api\Admin\RenterController@getMasterByUserid')->middleware('admin_auth', 'permission_admin');
             Route::get('/renters/{renter_id}', 'App\Http\Controllers\Api\Admin\RenterController@getOne')->middleware('admin_auth', 'permission_admin');
             Route::put('/renters/{renter_id}', 'App\Http\Controllers\Api\Admin\RenterController@updateUser')->middleware('admin_auth', 'permission_admin');
@@ -638,13 +638,13 @@ Route::middleware(["mid_res"])
 
             // Wallet withdrows  
             Route::post('/withdraws', 'App\Http\Controllers\Api\Admin\WalletTransactionController@createWalletWithdraws')->middleware('user_auth');
-            Route::get('/deposits', 'App\Http\Controllers\Api\Admin\WalletTransactionController@getAllWalletDeposit')->middleware('user_auth','permission_admin');
+            Route::get('/deposits', 'App\Http\Controllers\Api\Admin\WalletTransactionController@getAllWalletDeposit')->middleware('user_auth', 'permission_admin');
             Route::get('/withdraws', 'App\Http\Controllers\Api\Admin\WalletTransactionController@getAllWalletWithdraws')->middleware('user_auth', 'permission_admin');
             Route::put('/withdraw/edit/{wallet_transaction_id}', 'App\Http\Controllers\Api\Admin\WalletTransactionController@editWalletWithdrow')->middleware('user_auth', 'permission_admin');
-            
+
             Route::get('/getAllWalletDeposit/{user_id}', 'App\Http\Controllers\Api\Admin\WalletTransactionController@getAllWalletDepositbyUserId')->middleware('user_auth');
             Route::get('/getAllWalletWithdraw/{user_id}', 'App\Http\Controllers\Api\Admin\WalletTransactionController@getAllWalletWithdrawUserId')->middleware('user_auth');
-           
+
             // admin review 
             Route::post('/confirm-payment-status', 'App\Http\Controllers\Api\Admin\WallentTransactionAdminReviewController@confirmPaymentStatusAdmin')->middleware('user_auth', 'permission_admin');
             // withdrwa request review by admin 
@@ -652,8 +652,8 @@ Route::middleware(["mid_res"])
 
             // Route::get('/wallet-data-for-graph', 'App\Http\Controllers\Api\Admin\WallentTransactionAdminReviewController@getWalletDataForGraph')->middleware('user_auth', 'permission_admin');
             Route::get('/wallet-data-for-graph', 'App\Http\Controllers\Api\Admin\WallentTransactionAdminReviewController@getWalletDataForGraph')->middleware('user_auth', 'permission_admin');
-            
-         // Route for get Tower by User id
+
+            // Route for get Tower by User id
             // Route::get('/getAllTower/{userId}', 'App\Http\Controllers\Api\User\Manage\TowerController@getUserWiseAllTower')->middleware('user_auth', 'permission_admin');
 
             Route::get('/get-all-tower/{userId}', 'App\Http\Controllers\Api\User\Manage\TowerController@getUserWiseAllTower')->middleware('user_auth', 'permission_admin');
@@ -664,12 +664,16 @@ Route::middleware(["mid_res"])
             // is my last message 
             Route::get('/user/community/person_chat/{user_id}', 'App\Http\Controllers\Api\Admin\AdminMessageController@getLatestMessage')->middleware('user_auth', 'permission_admin');
 
+            //Set discount and update discount bill pay
+            Route::resource('settings', App\Http\Controllers\Api\Admin\SettingsController::class)->middleware('user_auth', 'permission_admin');
 
+            Route::post('contact_bill_by_wallet', 'App\Http\Controllers\Api\Admin\WalletTransactionController@contactBillByWallet')->middleware('user_auth', 'permission_admin');
+            Route::post('montly_room_rent_bill_by_wallet', 'App\Http\Controllers\Api\Admin\WalletTransactionController@montlyRoomBillByWallet')->middleware('user_auth', 'permission_admin');
         });
 
-           // Route for Wallet Transaction Bank List
-           Route::get('/getUserBankList', 'App\Http\Controllers\Api\Admin\WalletTransactionBankListController@getUserBankList')->middleware('user_auth');
-            
+        // Route for Wallet Transaction Bank List
+        Route::get('/getUserBankList', 'App\Http\Controllers\Api\Admin\WalletTransactionBankListController@getUserBankList')->middleware('user_auth');
+
 
         /**
          * Wallet Transaction
@@ -683,13 +687,13 @@ Route::middleware(["mid_res"])
         Route::post('/virtual-account/update', 'App\Http\Controllers\PaymentMethod\NinePayController@updateVirtualAccount')->middleware('user_auth');
         Route::post('/virtual-account/info', 'App\Http\Controllers\PaymentMethod\NinePayController@infoVirtualAccount')->middleware('user_auth');
 
-        Route::post('/payments-create','App\Http\Controllers\PaymentMethod\NinePayController@paymentCreate')->middleware('user_auth');
-        Route::get('/inquire','App\Http\Controllers\PaymentMethod\NinePayController@inquire')->middleware('user_auth');
-        Route::post('/refunds-create' ,'App\Http\Controllers\PaymentMethod\NinePayController@refundCreate')->middleware('user_auth');
+        Route::post('/payments-create', 'App\Http\Controllers\PaymentMethod\NinePayController@paymentCreate')->middleware('user_auth');
+        Route::get('/inquire', 'App\Http\Controllers\PaymentMethod\NinePayController@inquire')->middleware('user_auth');
+        Route::post('/refunds-create', 'App\Http\Controllers\PaymentMethod\NinePayController@refundCreate')->middleware('user_auth');
 
         // Route::get('get/invoice/inquire','App\Http\Controllers\PaymentMethod\NinePayController@invoiceInquire')->middleware('user_auth', 'permission_admin');
-        Route::get('/result','App\Http\Controllers\PaymentMethod\NinePayController@result');
-        Route::post('/ipn-url ','App\Http\Controllers\PaymentMethod\NinePayController@ipnUrlWebhook');
+        Route::get('/result', 'App\Http\Controllers\PaymentMethod\NinePayController@result');
+        Route::post('/ipn-url ', 'App\Http\Controllers\PaymentMethod\NinePayController@ipnUrlWebhook');
 
         Route::post('/addBank', 'App\Http\Controllers\BankController@addBank')->middleware('user_auth');
         // Route::put('/edit_bank_info/{bankId}', 'App\Http\Controllers\BankController@update')->middleware('user_auth');
@@ -698,5 +702,5 @@ Route::middleware(["mid_res"])
         // // Re post request to Admin 
         // Route::post('/user-send-request-admin', 'App\Http\Controllers\Api\NotificationUserController@sendRequest')->middleware('user_auth');
         // Route::post('/admin-approve-post-status', 'App\Http\Controllers\Api\User\Community\MoPostController@adminApprovedPost')->middleware('user_auth');
-
+        Route::resource('settings', App\Http\Controllers\SettingsController::class);
     });

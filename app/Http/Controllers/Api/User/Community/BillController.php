@@ -16,6 +16,7 @@ use App\Helper\NotiUserDefineCode;
 use App\Helper\StatusMotelDefineCode;
 use App\Helper\TypeFCM;
 use App\Jobs\NotificationUserJob;
+use App\Models\WalletTransaction;
 use Illuminate\Http\Response;
 use Carbon\Carbon;
 use Exception;
@@ -164,6 +165,19 @@ class BillController extends Controller
         $contractExist = DB::table('contracts')->where('id', $billExistedData->contract_id)->first();
         $motelExistaaa = DB::table('motels')->where('id', $contractExist->motel_id)->first();
         if ($request->status == StatusBillDefineCode::WAIT_FOR_CONFIRM) {
+
+            $master_coins = null;
+            $renter_coins = null;
+            $commissionPer =  Settings::where('type', 'commission')->first();
+            $golden_coin = \auth()->user()->golden_coin;
+            $wallet = WalletTransaction::where("user_id", \auth()->user()->id)->first();
+            if (\auth()->user()->is_host) {
+                $master_coins = $golden_coin + $wallet->deposit_money * (100 - $commissionPer->code_value) / 100;
+            } else {
+                $renter_coins = $golden_coin - $wallet->deposit_money * 1;
+            }
+
+
             NotificationUserJob::dispatch(
                 $contractExist->user_id,
                 "Hoá đơn đã được thanh toán",
@@ -188,7 +202,9 @@ class BillController extends Controller
             'success' => true,
             'msg_code' => MsgCode::SUCCESS[0],
             'msg' => MsgCode::SUCCESS[1],
-            'data' => $billExisted->first()
+            'data' => $billExisted->first(),
+            'master_coin' =>  $master_coins,
+            'renter_coins' => $renter_coins,
         ]);
     }
 
